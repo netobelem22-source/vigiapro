@@ -11,13 +11,8 @@ router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE'), async (req, re
     const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: { unidade: true } })
     if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' })
 
-    // Calcula total de vagas conforme turno
-    let totalVagas = 0
-    if (tipo === 'ENTRADA' || tipo === 'SAIDA') {
-      if (pedido.turno === 'DIA') totalVagas = pedido.qtdVigiaDia || 1
-      else if (pedido.turno === 'NOITE') totalVagas = pedido.qtdVigiNoite || 1
-      else totalVagas = (pedido.qtdVigiaDia || 1) + (pedido.qtdVigiNoite || 1)
-    }
+    // Total de vigias = quantidade de vigias solicitados (dia ou noite, o maior)
+    const totalVagas = Math.max(pedido.qtdVigiaDia || 1, pedido.qtdVigiNoite || 1)
 
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 24)
