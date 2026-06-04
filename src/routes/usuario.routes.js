@@ -48,4 +48,14 @@ router.put('/:id', autorizar('GESTOR'), async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+router.delete('/:id', autorizar('GESTOR'), async (req, res, next) => {
+  try {
+    await prisma.usuario.update({
+      where: { id: req.params.id },
+      data: { ativo: false }
+    })
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
 module.exports = router
