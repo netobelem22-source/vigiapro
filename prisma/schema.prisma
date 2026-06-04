@@ -90,7 +90,6 @@ model Pedido {
   inicioTurnoNoite String?
   observacao       String?
   status           StatusPedido @default(PENDENTE)
-  segmento         String       @default("LOJA")
   criadoEm         DateTime     @default(now())
 
   unidade       Unidade  @relation(fields: [unidadeId], references: [id])
@@ -114,6 +113,7 @@ model Ponto {
   gpsValido       Boolean     @default(false)
   nomeVigia       String?
   manual          Boolean     @default(false)
+  numeroVaga      Int?
   observacao      String?
   status          StatusPonto @default(ABERTO)
   confirmedAt     DateTime?
@@ -157,6 +157,8 @@ model LinkPonto {
   vigiaId   String?
   tipo      String   // ENTRADA | SAIDA
   usado     Boolean  @default(false)
+  numeroVaga   Int?     @default(1)
+  totalVagas   Int?     @default(1)
   expiresAt DateTime
   criadoEm  DateTime @default(now())
 

@@ -2,7 +2,7 @@ const router = require('express').Router()
 const { autenticar, autorizar } = require('../middleware/auth')
 const prisma = require('../utils/prisma')
 
-// Gera link de ponto para um pedido (ENTRADA ou SAIDA)
+// Gera links de ponto para um pedido — 1 link por vaga
 router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
   try {
     const { pedidoId, tipo } = req.body
@@ -11,19 +11,32 @@ router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE'), async (req, re
     const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: { unidade: true } })
     if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' })
 
+    // Calcula total de vagas conforme turno
+    let totalVagas = 0
+    if (tipo === 'ENTRADA' || tipo === 'SAIDA') {
+      if (pedido.turno === 'DIA') totalVagas = pedido.qtdVigiaDia || 1
+      else if (pedido.turno === 'NOITE') totalVagas = pedido.qtdVigiNoite || 1
+      else totalVagas = (pedido.qtdVigiaDia || 1) + (pedido.qtdVigiNoite || 1)
+    }
+
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 24)
 
-    const link = await prisma.linkPonto.create({
-      data: { pedidoId, tipo, expiresAt }
-    })
+    // Cria 1 link por vaga
+    const links = []
+    for (let i = 1; i <= totalVagas; i++) {
+      const link = await prisma.linkPonto.create({
+        data: { pedidoId, tipo, expiresAt, numeroVaga: i, totalVagas }
+      })
+      const url = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/ponto/${link.token}`
+      links.push({ ...link, url, numeroVaga: i })
+    }
 
-    const url = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/ponto/${link.token}`
-    res.json({ link, url })
+    res.json({ links, totalVagas })
   } catch (err) { next(err) }
 })
 
-// Página pública do link — retorna dados do pedido
+// Página pública do link
 router.get('/ponto/:token', async (req, res, next) => {
   try {
     const link = await prisma.linkPonto.findUnique({
@@ -37,6 +50,8 @@ router.get('/ponto/:token', async (req, res, next) => {
 
     res.json({
       tipo: link.tipo,
+      numeroVaga: link.numeroVaga || 1,
+      totalVagas: link.totalVagas || 1,
       unidade: link.pedido.unidade?.nome,
       cidade: link.pedido.unidade?.cidade,
       endereco: link.pedido.unidade?.endereco,
@@ -46,7 +61,7 @@ router.get('/ponto/:token', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-// Registra o ponto via link (sem autenticação)
+// Registra ponto via link
 router.post('/ponto/:token', async (req, res, next) => {
   try {
     const { latitude, longitude, fotoBase64, nomeVigia } = req.body
@@ -64,11 +79,7 @@ router.post('/ponto/:token', async (req, res, next) => {
       ? calcularDistancia({ latitude, longitude }, { latitude: unidade.latitude, longitude: unidade.longitude }) <= (unidade.raioGps || 200)
       : false
 
-    // Busca ou cria usuário vigia pelo nome (simplificado — sem auth)
-    let vigia = await prisma.usuario.findFirst({ where: { nome: nomeVigia, role: 'VIGIA' } })
-    if (!vigia && nomeVigia) {
-      vigia = await prisma.usuario.findFirst({ where: { unidadeId: link.pedido.unidadeId, role: 'VIGIA' } })
-    }
+    let vigia = await prisma.usuario.findFirst({ where: { role: 'VIGIA' } })
 
     const ponto = await prisma.ponto.create({
       data: {
@@ -79,15 +90,15 @@ router.post('/ponto/:token', async (req, res, next) => {
         gpsValido,
         fotoUrl: fotoBase64 || null,
         nomeVigia: nomeVigia || null,
-        vigiaId: vigia?.id || (await prisma.usuario.findFirst({ where: { role: 'VIGIA' } }))?.id,
+        vigiaId: vigia?.id,
         unidadeId: link.pedido.unidadeId,
         pedidoId: link.pedidoId,
-        status: 'ABERTO'
+        status: 'ABERTO',
+        numeroVaga: link.numeroVaga || 1
       }
     })
 
-    // Marca link como usado
-    await prisma.linkPonto.update({ where: { id: link.id }, data: { usado: true, vigiaId: vigia?.id } })
+    await prisma.linkPonto.update({ where: { id: link.id }, data: { usado: true } })
 
     res.json({ ok: true, ponto: { tipo: ponto.tipo, horario: ponto.horario, gpsValido } })
   } catch (err) { next(err) }
