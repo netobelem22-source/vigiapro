@@ -35,7 +35,7 @@ router.post('/', autorizar('GESTOR'), async (req, res, next) => {
 
 router.put('/:id', autorizar('GESTOR'), async (req, res, next) => {
   try {
-    const { senha, ...resto } = req.body
+    const { senha, id, criadoEm, unidade, pedidos, pontos, confirmacoes, historicos, ...resto } = req.body
     const data = { ...resto }
     if (senha) data.senha = await bcrypt.hash(senha, 10)
     const usuario = await prisma.usuario.update({
