@@ -38,7 +38,7 @@ router.get('/', async (req, res, next) => {
     const pares = {}
     for (const ponto of pontos) {
       const nomeVigia = ponto.nomeVigia || ponto.vigia?.nome || 'Desconhecido'
-      const dia = ponto.horario.toISOString().split('T')[0]
+      const dia = new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
       // Pareia pelo pedidoId — entrada e saída do mesmo pedido formam o par
       const chave = ponto.pedidoId
         ? `${ponto.pedidoId}|${dia}`
@@ -66,7 +66,10 @@ router.get('/', async (req, res, next) => {
 
       const uid = entrada.unidadeId
       const valorHora = entrada.unidade?.valorDiaria || valorHoraGlobal
-      const horas = Math.round(((new Date(saida.horario) - new Date(entrada.horario)) / (1000 * 60 * 60)) * 100) / 100
+      // Calcula diferença em minutos (mais preciso)
+      const diffMs = new Date(saida.horario) - new Date(entrada.horario)
+      const diffMin = Math.floor(diffMs / 60000)
+      const horas = diffMin / 60 // mantém precisão em fração de hora
 
       if (!porUnidade[uid]) {
         porUnidade[uid] = {
@@ -89,9 +92,9 @@ router.get('/', async (req, res, next) => {
       porUnidade[uid].detalhes.push({
         vigia: nomeVigia,
         segmento: segmentoPar,
-        data: entrada.horario.toISOString().split('T')[0],
-        entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        data: new Date(entrada.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
+        entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+        saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
         horas,
         valor: horas * valorHora
       })
