@@ -1,5 +1,5 @@
 {
-  "name": "vigiapro-backend",
+  "name": "vigiapro",
   "version": "1.0.0",
   "main": "src/server.js",
   "scripts": {
