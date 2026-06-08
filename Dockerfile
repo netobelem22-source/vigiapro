@@ -6,4 +6,4 @@ COPY prisma ./prisma
 RUN npm install --omit=dev
 COPY . .
 EXPOSE 8080
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
+CMD ["node", "src/server.js"]
