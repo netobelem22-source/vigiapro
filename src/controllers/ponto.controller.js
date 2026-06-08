@@ -59,7 +59,9 @@ const confirmar = async (req, res, next) => {
 
 const listar = async (req, res, next) => {
   try {
-    const { data, unidadeId, vigiaId } = req.query
+    const { data, unidadeId, vigiaId, status, page, limit } = req.query
+    const pg = Math.max(1, parseInt(page) || 1)
+    const lim = Math.min(200, parseInt(limit) || 20)
     const where = {}
     if (req.usuario.role === 'VIGIA') where.vigiaId = req.usuario.id
     else if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
@@ -72,12 +74,17 @@ const listar = async (req, res, next) => {
       const fim = new Date(data); fim.setDate(fim.getDate() + 1)
       where.horario = { gte: inicio, lt: fim }
     }
-    const pontos = await prisma.ponto.findMany({
-      where, include: { vigia: true, unidade: true, confirmadoPor: true, pedido: true },
-      orderBy: { horario: 'desc' },
-      take: 500
-    })
-    res.json(pontos)
+    if (status) where.status = status
+    const [total, pontos] = await Promise.all([
+      prisma.ponto.count({ where }),
+      prisma.ponto.findMany({
+        where, include: { vigia: true, unidade: true, confirmadoPor: true, pedido: true },
+        orderBy: { horario: 'desc' },
+        skip: (pg - 1) * lim,
+        take: lim
+      })
+    ])
+    res.json({ pontos, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)) })
   } catch (err) { next(err) }
 }
 

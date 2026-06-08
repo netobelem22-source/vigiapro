@@ -18,19 +18,25 @@ const registrarHistorico = async (pedidoId, usuarioId, acao, detalhe) => {
 
 const listar = async (req, res, next) => {
   try {
-    const { data, unidadeId, status, cidade } = req.query
+    const { data, unidadeId, status, cidade, page, limit } = req.query
+    const pg = Math.max(1, parseInt(page) || 1)
+    const lim = Math.min(200, parseInt(limit) || 20)
     const where = {}
     if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
     else if (unidadeId) where.unidadeId = unidadeId
     if (data) where.data = rangeData(data)
     if (status) where.status = status
     if (cidade) where.unidade = { cidade: { contains: cidade, mode: 'insensitive' } }
-    const pedidos = await prisma.pedido.findMany({
-      where, include: { unidade: true, solicitante: true, pontos: { where: { status: { not: 'ABERTO' } } } },
-      orderBy: { criadoEm: 'desc' },
-      take: 500
-    })
-    res.json(pedidos)
+    const [total, pedidos] = await Promise.all([
+      prisma.pedido.count({ where }),
+      prisma.pedido.findMany({
+        where, include: { unidade: true, solicitante: true, pontos: { where: { status: { not: 'ABERTO' } } } },
+        orderBy: { criadoEm: 'desc' },
+        skip: (pg - 1) * lim,
+        take: lim
+      })
+    ])
+    res.json({ pedidos, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)) })
   } catch (err) { next(err) }
 }
 
