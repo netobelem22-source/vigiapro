@@ -24,7 +24,7 @@ const resumoHoje = async (req, res, next) => {
     const totalVigiasDia = pedidosHoje.reduce((s, p) => s + (p.qtdVigiaDia || 0), 0)
     const totalVigiasNoite = pedidosHoje.reduce((s, p) => s + (p.qtdVigiNoite || 0), 0)
     const totalVigias = totalVigiasDia + totalVigiasNoite
-    const custoEstimado = totalVigias * valorDiaria
+    const custoEstimado = totalVigias * 12 * valorDiaria
 
     res.json({
       totalPedidos, pedidosPendentes, totalPontos, pontosAbertos,
