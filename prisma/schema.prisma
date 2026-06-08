@@ -126,8 +126,8 @@ model Ponto {
   confirmedAt     DateTime?
   criadoEm        DateTime    @default(now())
 
-  vigia           Usuario  @relation(fields: [vigiaId], references: [id])
-  vigiaId         String
+  vigia           Usuario? @relation(fields: [vigiaId], references: [id])
+  vigiaId         String?
 
   unidade         Unidade  @relation(fields: [unidadeId], references: [id])
   unidadeId       String

@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { autenticar, autorizar } = require('../middleware/auth')
 const prisma = require('../utils/prisma')
+const { uploadFoto } = require('../utils/cloudinary')
 
 // Gera links de ponto para um pedido — 1 link por vaga
 router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
@@ -74,8 +75,6 @@ router.post('/ponto/:token', async (req, res, next) => {
       ? calcularDistancia({ latitude, longitude }, { latitude: unidade.latitude, longitude: unidade.longitude }) <= (unidade.raioGps || 200)
       : false
 
-    let vigia = await prisma.usuario.findFirst({ where: { role: 'VIGIA' } })
-
     const ponto = await prisma.ponto.create({
       data: {
         tipo: link.tipo,
@@ -83,9 +82,8 @@ router.post('/ponto/:token', async (req, res, next) => {
         latitude: latitude || null,
         longitude: longitude || null,
         gpsValido,
-        fotoUrl: fotoBase64 || null,
+        fotoUrl: fotoBase64 ? await uploadFoto(fotoBase64) : null,
         nomeVigia: nomeVigia || null,
-        vigiaId: vigia?.id,
         unidadeId: link.pedido.unidadeId,
         pedidoId: link.pedidoId,
         status: 'ABERTO',
