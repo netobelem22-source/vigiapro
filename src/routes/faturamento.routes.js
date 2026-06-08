@@ -39,10 +39,8 @@ router.get('/', async (req, res, next) => {
     for (const ponto of pontos) {
       const nomeVigia = ponto.nomeVigia || ponto.vigia?.nome || 'Desconhecido'
       const dia = new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
-      // Pareia pelo pedidoId — entrada e saída do mesmo pedido formam o par
-      const chave = ponto.pedidoId
-        ? `${ponto.pedidoId}|${dia}`
-        : `${ponto.unidadeId}|${nomeVigia}|${dia}`
+      const vigiaKey = ponto.vigiaId || nomeVigia
+      const chave = `${ponto.pedidoId || ponto.unidadeId}|${vigiaKey}|${dia}`
 
       if (!pares[chave]) pares[chave] = { entrada: null, saida: null, nomeVigia }
       if (ponto.tipo === 'ENTRADA') {
@@ -69,7 +67,7 @@ router.get('/', async (req, res, next) => {
       // Calcula diferença em minutos (mais preciso)
       const diffMs = new Date(saida.horario) - new Date(entrada.horario)
       const diffMin = Math.floor(diffMs / 60000)
-      const horas = diffMin / 60 // mantém precisão em fração de hora
+      const horas = Math.min(diffMin / 60, 12)
 
       if (!porUnidade[uid]) {
         porUnidade[uid] = {
