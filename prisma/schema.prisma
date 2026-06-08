@@ -90,6 +90,8 @@ model Pedido {
   qtdVigiNoite     Int          @default(0)
   inicioTurnoDia   String?
   inicioTurnoNoite String?
+  fimTurnoDia      String?
+  fimTurnoNoite    String?
   observacao       String?
   status           StatusPedido @default(PENDENTE)
   segmento         String       @default("LOJA")

@@ -36,7 +36,7 @@ const listar = async (req, res, next) => {
 
 const criar = async (req, res, next) => {
   try {
-    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, observacao, unidadeId } = req.body
+    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao, unidadeId } = req.body
 
     const uid = unidadeId || req.usuario.unidadeId
     const inicio = dataLocal(dataInicio)
@@ -53,7 +53,7 @@ const criar = async (req, res, next) => {
         segmento: segmento || 'LOJA',
         qtdVigiaDia: parseInt(qtdVigiaDia) || 0,
         qtdVigiNoite: parseInt(qtdVigiNoite) || 0,
-        inicioTurnoDia, inicioTurnoNoite, observacao,
+        inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao,
         unidadeId: uid,
         solicitanteId: req.usuario.id,
         status: 'PENDENTE'
