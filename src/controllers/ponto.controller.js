@@ -74,7 +74,8 @@ const listar = async (req, res, next) => {
     }
     const pontos = await prisma.ponto.findMany({
       where, include: { vigia: true, unidade: true, confirmadoPor: true, pedido: true },
-      orderBy: { horario: 'desc' }
+      orderBy: { horario: 'desc' },
+      take: 500
     })
     res.json(pontos)
   } catch (err) { next(err) }

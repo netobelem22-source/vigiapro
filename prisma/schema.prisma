@@ -49,6 +49,8 @@ model Usuario {
   pontos       Ponto[]
   confirmacoes Ponto[] @relation("Confirmacoes")
   historicos   HistoricoPedido[]
+
+  @@index([unidadeId, role])
 }
 
 model Empresa {
@@ -102,6 +104,10 @@ model Pedido {
   pontos        Ponto[]
   historico     HistoricoPedido[]
   links         LinkPonto[]
+
+  @@index([unidadeId])
+  @@index([data])
+  @@index([status])
 }
 
 model Ponto {
@@ -131,6 +137,11 @@ model Ponto {
 
   confirmadoPor   Usuario? @relation("Confirmacoes", fields: [confirmadoPorId], references: [id])
   confirmadoPorId String?
+
+  @@index([vigiaId])
+  @@index([unidadeId])
+  @@index([horario])
+  @@index([status])
 }
 
 model Configuracao {

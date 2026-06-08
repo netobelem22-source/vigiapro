@@ -26,7 +26,9 @@ const listar = async (req, res, next) => {
     if (status) where.status = status
     if (cidade) where.unidade = { cidade: { contains: cidade, mode: 'insensitive' } }
     const pedidos = await prisma.pedido.findMany({
-      where, include: { unidade: true, solicitante: true, pontos: { where: { status: { not: 'ABERTO' } } } }, orderBy: { criadoEm: 'desc' }
+      where, include: { unidade: true, solicitante: true, pontos: { where: { status: { not: 'ABERTO' } } } },
+      orderBy: { criadoEm: 'desc' },
+      take: 500
     })
     res.json(pedidos)
   } catch (err) { next(err) }
@@ -113,9 +115,7 @@ const confirmarTodos = async (req, res, next) => {
     if (pendentes.length === 0) return res.json({ confirmados: 0 })
 
     await prisma.pedido.updateMany({ where: { id: { in: pendentes.map(p => p.id) } }, data: { status: 'CONFIRMADO' } })
-    for (const p of pendentes) {
-      await registrarHistorico(p.id, req.usuario.id, 'CONFIRMADO', 'Confirmado em lote')
-    }
+    await Promise.all(pendentes.map(p => registrarHistorico(p.id, req.usuario.id, 'CONFIRMADO', 'Confirmado em lote')))
 
     res.json({ confirmados: pendentes.length })
   } catch (err) { next(err) }
