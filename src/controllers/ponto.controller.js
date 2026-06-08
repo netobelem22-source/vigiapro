@@ -48,7 +48,7 @@ const confirmar = async (req, res, next) => {
       data: { status: 'CONFIRMADO', confirmadoPorId: req.usuario.id, confirmedAt: new Date() },
       include: { vigia: true }
     })
-    if (ponto.vigia.fcmToken) await enviarNotificacao(ponto.vigia.fcmToken, {
+    if (ponto.vigia?.fcmToken) await enviarNotificacao(ponto.vigia.fcmToken, {
       titulo: 'Presença confirmada',
       corpo: 'Seu registro foi confirmado pelo gerente.',
       dados: { pontoId: ponto.id }
