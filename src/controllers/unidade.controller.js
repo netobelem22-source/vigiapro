@@ -6,20 +6,40 @@ const CAMPOS_PARCEIRO = { id: true, nome: true, endereco: true, cidade: true, es
 
 const listar = async (req, res, next) => {
   try {
+    const { busca, page, limit } = req.query
+    const pg = Math.max(1, parseInt(page) || 1)
+    const lim = Math.min(100, parseInt(limit) || 24)
+    const skip = (pg - 1) * lim
+
+    const buscaWhere = busca ? {
+      OR: [
+        { nome: { contains: busca, mode: 'insensitive' } },
+        { cidade: { contains: busca, mode: 'insensitive' } }
+      ]
+    } : {}
+
     if (req.usuario.role === 'TERCEIRO') {
-      const unidades = await prisma.unidade.findMany({
-        where: { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) } },
-        select: CAMPOS_PARCEIRO,
-        orderBy: [{ cidade: 'asc' }, { nome: 'asc' }]
-      })
-      return res.json(unidades)
+      const where = { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) }, ...buscaWhere }
+      const [total, unidades] = await Promise.all([
+        prisma.unidade.count({ where }),
+        prisma.unidade.findMany({ where, select: CAMPOS_PARCEIRO, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim })
+      ])
+      return res.json({ unidades, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)) })
     }
-    const unidades = await prisma.unidade.findMany({
-      where: { ativo: true },
-      include: { empresa: true },
-      orderBy: [{ cidade: 'asc' }, { nome: 'asc' }]
+
+    const where = { ativo: true, ...buscaWhere }
+    const [total, unidades, resumoAtivas] = await Promise.all([
+      prisma.unidade.count({ where }),
+      prisma.unidade.findMany({ where, include: { empresa: true }, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim }),
+      prisma.unidade.findMany({ where: { ativo: true }, select: { cidade: true, valorDiaria: true } })
+    ])
+    const totalCidades = new Set(resumoAtivas.map(u => u.cidade)).size
+    const semValor = resumoAtivas.filter(u => !u.valorDiaria).length
+
+    res.json({
+      unidades, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)),
+      totalUnidades: resumoAtivas.length, totalCidades, semValor
     })
-    res.json(unidades)
   } catch (err) { next(err) }
 }
 
