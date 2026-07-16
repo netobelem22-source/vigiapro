@@ -147,6 +147,7 @@ model Ponto {
   @@index([unidadeId])
   @@index([horario])
   @@index([status])
+  @@index([pedidoId])
 }
 
 model Configuracao {
@@ -165,6 +166,8 @@ model HistoricoPedido {
 
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
   pedido    Pedido   @relation(fields: [pedidoId], references: [id])
+
+  @@index([pedidoId])
 }
 
 model LinkPonto {
@@ -180,6 +183,8 @@ model LinkPonto {
   criadoEm  DateTime @default(now())
 
   pedido    Pedido   @relation(fields: [pedidoId], references: [id])
+
+  @@index([pedidoId])
 }
 
 // Vincula um usuário TERCEIRO às unidades que ele está autorizado a atender.

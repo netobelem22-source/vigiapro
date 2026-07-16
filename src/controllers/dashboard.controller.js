@@ -13,7 +13,7 @@ const resumoHoje = async (req, res, next) => {
     const valorDiaria = config.valorDiaria
 
     const [pedidosHoje, totalPontos, pontosAbertos, totalUnidades] = await Promise.all([
-      prisma.pedido.findMany({ where: { ...where, data: { gte: hoje, lt: amanha } } }),
+      prisma.pedido.findMany({ where: { ...where, data: { gte: hoje, lt: amanha } }, select: { status: true, qtdVigiaDia: true, qtdVigiNoite: true } }),
       prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha } } }),
       prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha }, status: 'ABERTO' } }),
       prisma.unidade.count({ where: { ativo: true } })
