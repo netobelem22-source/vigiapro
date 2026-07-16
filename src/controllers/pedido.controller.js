@@ -1,4 +1,5 @@
 const prisma = require('../utils/prisma')
+const { unidadesDoParceiro } = require('../utils/parceiro')
 
 const rangeData = (dataStr) => {
   const [ano, mes, dia] = dataStr.split('-').map(Number)
@@ -23,6 +24,7 @@ const listar = async (req, res, next) => {
     const lim = Math.min(200, parseInt(limit) || 20)
     const where = {}
     if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
+    else if (req.usuario.role === 'TERCEIRO') where.unidadeId = { in: await unidadesDoParceiro(req.usuario.id) }
     else if (unidadeId) where.unidadeId = unidadeId
     if (data) where.data = rangeData(data)
     if (status) where.status = status
@@ -95,6 +97,10 @@ const buscar = async (req, res, next) => {
       }
     })
     if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' })
+    if (req.usuario.role === 'GERENTE' && pedido.unidadeId !== req.usuario.unidadeId)
+      return res.status(403).json({ erro: 'Acesso não permitido' })
+    if (req.usuario.role === 'TERCEIRO' && !(await unidadesDoParceiro(req.usuario.id)).includes(pedido.unidadeId))
+      return res.status(403).json({ erro: 'Acesso não permitido' })
     res.json(pedido)
   } catch (err) { next(err) }
 }
@@ -102,6 +108,17 @@ const buscar = async (req, res, next) => {
 const atualizarStatus = async (req, res, next) => {
   try {
     const { status } = req.body
+    const atual = await prisma.pedido.findUnique({ where: { id: req.params.id } })
+    if (!atual) return res.status(404).json({ erro: 'Pedido não encontrado' })
+    if (req.usuario.role === 'GERENTE' && atual.unidadeId !== req.usuario.unidadeId)
+      return res.status(403).json({ erro: 'Acesso não permitido' })
+    if (req.usuario.role === 'TERCEIRO') {
+      if (!(await unidadesDoParceiro(req.usuario.id)).includes(atual.unidadeId))
+        return res.status(403).json({ erro: 'Acesso não permitido' })
+      if (status !== 'CONFIRMADO')
+        return res.status(403).json({ erro: 'Terceiros só podem confirmar pedidos' })
+    }
+
     const pedido = await prisma.pedido.update({
       where: { id: req.params.id }, data: { status }, include: { unidade: true }
     })

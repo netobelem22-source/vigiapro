@@ -6,7 +6,7 @@ router.use(autenticar)
 router.get('/', listar)
 router.post('/', autorizar('GERENTE', 'GESTOR'), criar)
 router.get('/:id', buscar)
-router.patch('/:id/status', autorizar('GESTOR', 'GERENTE'), atualizarStatus)
+router.patch('/:id/status', autorizar('GESTOR', 'GERENTE', 'TERCEIRO'), atualizarStatus)
 router.post('/confirmar-todos', autorizar('GESTOR', 'GERENTE'), confirmarTodos)
 
 module.exports = router

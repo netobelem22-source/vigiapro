@@ -17,6 +17,7 @@ enum Role {
   VIGIA
   GERENTE
   GESTOR
+  TERCEIRO
 }
 
 enum StatusPedido {
@@ -49,6 +50,7 @@ model Usuario {
   pontos       Ponto[]
   confirmacoes Ponto[] @relation("Confirmacoes")
   historicos   HistoricoPedido[]
+  unidadesParceiras UnidadeParceiro[]
 
   @@index([unidadeId, role])
 }
@@ -80,6 +82,7 @@ model Unidade {
   usuarios  Usuario[]
   pedidos   Pedido[]
   pontos    Ponto[]
+  parceiros UnidadeParceiro[]
 }
 
 model Pedido {
@@ -177,4 +180,20 @@ model LinkPonto {
   criadoEm  DateTime @default(now())
 
   pedido    Pedido   @relation(fields: [pedidoId], references: [id])
+}
+
+// Vincula um usuário TERCEIRO às unidades que ele está autorizado a atender.
+// Editável a qualquer momento pelo GESTOR, sem alterar código.
+model UnidadeParceiro {
+  id       String   @id @default(uuid())
+  criadoEm DateTime @default(now())
+
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  usuarioId String
+
+  unidade   Unidade @relation(fields: [unidadeId], references: [id])
+  unidadeId String
+
+  @@unique([usuarioId, unidadeId])
+  @@index([unidadeId])
 }

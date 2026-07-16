@@ -5,7 +5,7 @@ const prisma = new PrismaClient()
 
 router.use(autenticar)
 
-router.get('/', async (req, res, next) => {
+router.get('/', autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
   try {
     let config = await prisma.configuracao.findFirst()
     if (!config) config = await prisma.configuracao.create({ data: { valorDiaria: 180 } })

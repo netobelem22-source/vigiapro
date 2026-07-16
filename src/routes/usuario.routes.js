@@ -58,4 +58,40 @@ router.delete('/:id', autorizar('GESTOR'), async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// Unidades que um usuário TERCEIRO está autorizado a atender
+router.get('/:id/unidades', autorizar('GESTOR'), async (req, res, next) => {
+  try {
+    const vinculos = await prisma.unidadeParceiro.findMany({
+      where: { usuarioId: req.params.id },
+      include: { unidade: true },
+      orderBy: { unidade: { nome: 'asc' } }
+    })
+    res.json(vinculos.map(v => v.unidade))
+  } catch (err) { next(err) }
+})
+
+router.post('/:id/unidades', autorizar('GESTOR'), async (req, res, next) => {
+  try {
+    const { unidadeId } = req.body
+    if (!unidadeId) return res.status(400).json({ erro: 'unidadeId é obrigatório' })
+    const vinculo = await prisma.unidadeParceiro.create({
+      data: { usuarioId: req.params.id, unidadeId },
+      include: { unidade: true }
+    })
+    res.status(201).json(vinculo)
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(400).json({ erro: 'Unidade já vinculada a este usuário' })
+    next(err)
+  }
+})
+
+router.delete('/:id/unidades/:unidadeId', autorizar('GESTOR'), async (req, res, next) => {
+  try {
+    await prisma.unidadeParceiro.delete({
+      where: { usuarioId_unidadeId: { usuarioId: req.params.id, unidadeId: req.params.unidadeId } }
+    })
+    res.json({ ok: true })
+  } catch (err) { next(err) }
+})
+
 module.exports = router
