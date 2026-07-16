@@ -107,7 +107,10 @@ const buscar = async (req, res, next) => {
 
 const atualizarStatus = async (req, res, next) => {
   try {
-    const { status } = req.body
+    const { status, motivo } = req.body
+    if (status === 'CANCELADO' && !motivo?.trim())
+      return res.status(400).json({ erro: 'Informe o motivo da recusa' })
+
     const atual = await prisma.pedido.findUnique({ where: { id: req.params.id } })
     if (!atual) return res.status(404).json({ erro: 'Pedido não encontrado' })
     if (req.usuario.role === 'GERENTE' && atual.unidadeId !== req.usuario.unidadeId)
@@ -122,7 +125,8 @@ const atualizarStatus = async (req, res, next) => {
     const pedido = await prisma.pedido.update({
       where: { id: req.params.id }, data: { status }, include: { unidade: true }
     })
-    await registrarHistorico(pedido.id, req.usuario.id, status, `Status alterado para ${status}`)
+    const detalhe = status === 'CANCELADO' ? `Recusado: ${motivo.trim()}` : `Status alterado para ${status}`
+    await registrarHistorico(pedido.id, req.usuario.id, status, detalhe)
     res.json(pedido)
   } catch (err) { next(err) }
 }
