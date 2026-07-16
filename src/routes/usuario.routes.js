@@ -50,11 +50,28 @@ router.put('/:id', autorizar('GESTOR'), async (req, res, next) => {
 
 router.delete('/:id', autorizar('GESTOR'), async (req, res, next) => {
   try {
-    await prisma.usuario.update({
-      where: { id: req.params.id },
-      data: { ativo: false }
-    })
-    res.json({ ok: true })
+    const id = req.params.id
+    const [pedidos, pontos, confirmacoes, historicos, unidadesParceiras] = await Promise.all([
+      prisma.pedido.count({ where: { solicitanteId: id } }),
+      prisma.ponto.count({ where: { vigiaId: id } }),
+      prisma.ponto.count({ where: { confirmadoPorId: id } }),
+      prisma.historicoPedido.count({ where: { usuarioId: id } }),
+      prisma.unidadeParceiro.count({ where: { usuarioId: id } })
+    ])
+    const temHistorico = pedidos > 0 || pontos > 0 || confirmacoes > 0 || historicos > 0 || unidadesParceiras > 0
+
+    if (!temHistorico) {
+      try {
+        await prisma.usuario.delete({ where: { id } })
+        return res.json({ ok: true, excluido: true })
+      } catch (e) {
+        if (e.code !== 'P2003') throw e
+        // caiu num vínculo que não checamos acima — segue para desativação
+      }
+    }
+
+    await prisma.usuario.update({ where: { id }, data: { ativo: false } })
+    res.json({ ok: true, excluido: false, motivo: 'Usuário tem histórico no sistema (pedidos, pontos ou registros vinculados) — foi desativado em vez de excluído para preservar esses registros.' })
   } catch (err) { next(err) }
 })
 
