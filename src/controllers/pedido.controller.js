@@ -105,6 +105,29 @@ const buscar = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+const atualizar = async (req, res, next) => {
+  try {
+    const { segmento, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite } = req.body
+    const atual = await prisma.pedido.findUnique({ where: { id: req.params.id } })
+    if (!atual) return res.status(404).json({ erro: 'Pedido não encontrado' })
+    if (req.usuario.role === 'GERENTE' && atual.unidadeId !== req.usuario.unidadeId)
+      return res.status(403).json({ erro: 'Acesso não permitido' })
+    if (atual.status === 'CANCELADO')
+      return res.status(400).json({ erro: 'Pedido recusado não pode ser editado' })
+
+    const data = {}
+    if (segmento !== undefined) data.segmento = segmento
+    if (inicioTurnoDia !== undefined) data.inicioTurnoDia = inicioTurnoDia
+    if (inicioTurnoNoite !== undefined) data.inicioTurnoNoite = inicioTurnoNoite
+    if (fimTurnoDia !== undefined) data.fimTurnoDia = fimTurnoDia
+    if (fimTurnoNoite !== undefined) data.fimTurnoNoite = fimTurnoNoite
+
+    const pedido = await prisma.pedido.update({ where: { id: req.params.id }, data, include: { unidade: true } })
+    await registrarHistorico(pedido.id, req.usuario.id, 'EDITADO', 'Segmento/horário do pedido atualizados')
+    res.json(pedido)
+  } catch (err) { next(err) }
+}
+
 const atualizarStatus = async (req, res, next) => {
   try {
     const { status, motivo } = req.body
@@ -148,4 +171,4 @@ const confirmarTodos = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { listar, criar, buscar, atualizarStatus, confirmarTodos }
+module.exports = { listar, criar, buscar, atualizar, atualizarStatus, confirmarTodos }
