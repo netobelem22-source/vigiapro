@@ -4,11 +4,67 @@ const prisma = require('../utils/prisma')
 
 router.use(autenticar, autorizar('GESTOR', 'GERENTE'))
 
+const SEGMENTOS = ['LOJA', 'OBRA', 'EXPANSAO']
+
+// Agrega uma lista de pares entrada/saída (já filtrada) em linhas por unidade + totais
+const agregar = (paresFiltrados, valorHoraGlobal) => {
+  const porUnidade = {}
+  for (const par of paresFiltrados) {
+    const { entrada, saida, nomeVigia, segmentoPar } = par
+    const uid = entrada.unidadeId
+    const valorHora = entrada.unidade?.valorDiaria || valorHoraGlobal
+    const diffMs = new Date(saida.horario) - new Date(entrada.horario)
+    const diffMin = Math.floor(diffMs / 60000)
+    const horas = Math.min(diffMin / 60, 12)
+
+    if (!porUnidade[uid]) {
+      porUnidade[uid] = {
+        unidadeId: uid,
+        unidade: entrada.unidade?.nome,
+        cidade: entrada.unidade?.cidade,
+        cnpj: entrada.unidade?.cnpj,
+        empresa: entrada.unidade?.empresa?.nome,
+        valorHora,
+        registros: 0,
+        totalHoras: 0,
+        valorTotal: 0,
+        detalhes: []
+      }
+    }
+
+    porUnidade[uid].registros++
+    porUnidade[uid].totalHoras += horas
+    porUnidade[uid].valorTotal += horas * valorHora
+    porUnidade[uid].detalhes.push({
+      vigia: nomeVigia,
+      segmento: segmentoPar,
+      data: new Date(entrada.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
+      entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+      saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+      horas,
+      valor: horas * valorHora
+    })
+  }
+
+  const linhas = Object.values(porUnidade)
+    .map(l => ({ ...l, totalHoras: Math.round(l.totalHoras * 100) / 100, valorTotal: Math.round(l.valorTotal * 100) / 100 }))
+    .sort((a, b) => (a.cidade || '').localeCompare(b.cidade || ''))
+
+  const totais = linhas.reduce((acc, l) => ({
+    registros: acc.registros + l.registros,
+    totalHoras: acc.totalHoras + l.totalHoras,
+    valorTotal: acc.valorTotal + l.valorTotal
+  }), { registros: 0, totalHoras: 0, valorTotal: 0 })
+  totais.totalHoras = Math.round(totais.totalHoras * 100) / 100
+  totais.valorTotal = Math.round(totais.valorTotal * 100) / 100
+
+  return { linhas, totais }
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
     const ano = parseInt(req.query.ano) || new Date().getFullYear()
-    const segmento = req.query.segmento || null
 
     const inicio = new Date(ano, mes - 1, 1)
     const fim = new Date(ano, mes, 1)
@@ -20,6 +76,7 @@ router.get('/', async (req, res, next) => {
       ? { unidadeId: req.usuario.unidadeId }
       : {}
 
+    // Busca única do mês — usada para montar "todos" e cada segmento, sem repetir a consulta
     const pontos = await prisma.ponto.findMany({
       where: {
         ...whereBase,
@@ -35,83 +92,33 @@ router.get('/', async (req, res, next) => {
     })
 
     // Monta pares entrada/saída por: unidade | pedido | dia
-    const pares = {}
+    const paresPorChave = {}
     for (const ponto of pontos) {
       const nomeVigia = ponto.nomeVigia || ponto.vigia?.nome || 'Desconhecido'
       const dia = new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
       const vigiaKey = ponto.vigiaId || nomeVigia
       const chave = `${ponto.pedidoId || ponto.unidadeId}|${vigiaKey}|${dia}`
 
-      if (!pares[chave]) pares[chave] = { entrada: null, saida: null, nomeVigia }
+      if (!paresPorChave[chave]) paresPorChave[chave] = { entrada: null, saida: null, nomeVigia }
       if (ponto.tipo === 'ENTRADA') {
-        pares[chave].entrada = ponto
-        pares[chave].nomeVigia = nomeVigia // usa nome da entrada
+        paresPorChave[chave].entrada = ponto
+        paresPorChave[chave].nomeVigia = nomeVigia // usa nome da entrada
       }
-      else if (ponto.tipo === 'SAIDA') pares[chave].saida = ponto
+      else if (ponto.tipo === 'SAIDA') paresPorChave[chave].saida = ponto
     }
 
-    const porUnidade = {}
+    // Filtra pares completos (com entrada e saída) e anota o segmento uma única vez
+    const paresCompletos = Object.values(paresPorChave)
+      .filter(p => p.entrada && p.saida)
+      .map(p => ({ ...p, segmentoPar: p.entrada.pedido?.segmento || null }))
 
-    for (const par of Object.values(pares)) {
-      const { entrada, saida, nomeVigia } = par
-      if (!entrada || !saida) continue
-
-      // Segmento vem sempre da ENTRADA
-      const segmentoPar = entrada.pedido?.segmento || null
-
-      // Filtra por segmento se solicitado
-      if (segmento && segmentoPar !== segmento) continue
-
-      const uid = entrada.unidadeId
-      const valorHora = entrada.unidade?.valorDiaria || valorHoraGlobal
-      // Calcula diferença em minutos (mais preciso)
-      const diffMs = new Date(saida.horario) - new Date(entrada.horario)
-      const diffMin = Math.floor(diffMs / 60000)
-      const horas = Math.min(diffMin / 60, 12)
-
-      if (!porUnidade[uid]) {
-        porUnidade[uid] = {
-          unidadeId: uid,
-          unidade: entrada.unidade?.nome,
-          cidade: entrada.unidade?.cidade,
-          cnpj: entrada.unidade?.cnpj,
-          empresa: entrada.unidade?.empresa?.nome,
-          valorHora,
-          registros: 0,
-          totalHoras: 0,
-          valorTotal: 0,
-          detalhes: []
-        }
-      }
-
-      porUnidade[uid].registros++
-      porUnidade[uid].totalHoras += horas
-      porUnidade[uid].valorTotal += horas * valorHora
-      porUnidade[uid].detalhes.push({
-        vigia: nomeVigia,
-        segmento: segmentoPar,
-        data: new Date(entrada.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
-        entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-        saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-        horas,
-        valor: horas * valorHora
-      })
+    const todos = agregar(paresCompletos, valorHoraGlobal)
+    const porSegmento = {}
+    for (const seg of SEGMENTOS) {
+      porSegmento[seg] = agregar(paresCompletos.filter(p => p.segmentoPar === seg), valorHoraGlobal)
     }
 
-    const linhas = Object.values(porUnidade)
-      .map(l => ({ ...l, totalHoras: Math.round(l.totalHoras * 100) / 100, valorTotal: Math.round(l.valorTotal * 100) / 100 }))
-      .sort((a, b) => (a.cidade || '').localeCompare(b.cidade || ''))
-
-    const totais = linhas.reduce((acc, l) => ({
-      registros: acc.registros + l.registros,
-      totalHoras: acc.totalHoras + l.totalHoras,
-      valorTotal: acc.valorTotal + l.valorTotal
-    }), { registros: 0, totalHoras: 0, valorTotal: 0 })
-
-    totais.totalHoras = Math.round(totais.totalHoras * 100) / 100
-    totais.valorTotal = Math.round(totais.valorTotal * 100) / 100
-
-    res.json({ mes, ano, valorHoraGlobal, segmento, linhas, totais })
+    res.json({ mes, ano, valorHoraGlobal, todos, porSegmento })
   } catch (err) { next(err) }
 })
 
