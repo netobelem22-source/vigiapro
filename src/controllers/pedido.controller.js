@@ -105,6 +105,46 @@ const buscar = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
+const relatorioMensal = async (req, res, next) => {
+  try {
+    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
+    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    const inicio = new Date(ano, mes - 1, 1)
+    const fim = new Date(ano, mes, 1)
+
+    const where = { data: { gte: inicio, lt: fim } }
+    if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
+
+    const pedidos = await prisma.pedido.findMany({
+      where,
+      select: {
+        status: true, qtdVigiaDia: true, qtdVigiNoite: true,
+        unidade: { select: { nome: true, cidade: true } }
+      }
+    })
+
+    let confirmados = 0, pendentes = 0, totalVigiasDia = 0, totalVigiasNoite = 0
+    const porUnidade = {}
+    for (const p of pedidos) {
+      if (p.status === 'CONFIRMADO') confirmados++
+      if (p.status === 'PENDENTE') pendentes++
+      totalVigiasDia += p.qtdVigiaDia || 0
+      totalVigiasNoite += p.qtdVigiNoite || 0
+
+      const nome = p.unidade?.nome || 'Sem unidade'
+      if (!porUnidade[nome]) porUnidade[nome] = { nome, cidade: p.unidade?.cidade, pedidos: 0, vigiasDia: 0, vigiasNoite: 0 }
+      porUnidade[nome].pedidos++
+      porUnidade[nome].vigiasDia += p.qtdVigiaDia || 0
+      porUnidade[nome].vigiasNoite += p.qtdVigiNoite || 0
+    }
+
+    res.json({
+      mes, ano, total: pedidos.length, confirmados, pendentes, totalVigiasDia, totalVigiasNoite,
+      porUnidade: Object.values(porUnidade).sort((a, b) => b.pedidos - a.pedidos)
+    })
+  } catch (err) { next(err) }
+}
+
 const atualizar = async (req, res, next) => {
   try {
     const { segmento, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite } = req.body
@@ -161,14 +201,15 @@ const confirmarTodos = async (req, res, next) => {
     if (data) where.data = rangeData(data)
     if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
 
-    const pendentes = await prisma.pedido.findMany({ where, include: { unidade: true } })
+    const LIMITE_LOTE = 500
+    const pendentes = await prisma.pedido.findMany({ where, include: { unidade: true }, take: LIMITE_LOTE })
     if (pendentes.length === 0) return res.json({ confirmados: 0 })
 
     await prisma.pedido.updateMany({ where: { id: { in: pendentes.map(p => p.id) } }, data: { status: 'CONFIRMADO' } })
     await Promise.all(pendentes.map(p => registrarHistorico(p.id, req.usuario.id, 'CONFIRMADO', 'Confirmado em lote')))
 
-    res.json({ confirmados: pendentes.length })
+    res.json({ confirmados: pendentes.length, limitado: pendentes.length === LIMITE_LOTE })
   } catch (err) { next(err) }
 }
 
-module.exports = { listar, criar, buscar, atualizar, atualizarStatus, confirmarTodos }
+module.exports = { listar, criar, buscar, atualizar, atualizarStatus, confirmarTodos, relatorioMensal }

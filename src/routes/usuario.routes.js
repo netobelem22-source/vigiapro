@@ -8,12 +8,29 @@ router.use(autenticar)
 
 router.get('/', autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
   try {
-    const usuarios = await prisma.usuario.findMany({
-      include: { unidade: true },
-      orderBy: { nome: 'asc' }
-    })
+    const { busca, role, ativo, page, limit } = req.query
+    const pg = Math.max(1, parseInt(page) || 1)
+    const lim = Math.min(200, parseInt(limit) || 24)
+
+    const baseWhere = {}
+    if (role) baseWhere.role = role
+    if (busca) baseWhere.OR = [
+      { nome: { contains: busca, mode: 'insensitive' } },
+      { email: { contains: busca, mode: 'insensitive' } }
+    ]
+    const where = { ...baseWhere }
+    if (ativo !== undefined) where.ativo = ativo === 'true'
+
+    const [total, usuarios, totalInativos] = await Promise.all([
+      prisma.usuario.count({ where }),
+      prisma.usuario.findMany({
+        where, include: { unidade: true }, orderBy: { nome: 'asc' },
+        skip: (pg - 1) * lim, take: lim
+      }),
+      prisma.usuario.count({ where: { ...baseWhere, ativo: false } })
+    ])
     const sem_senha = usuarios.map(({ senha, ...u }) => u)
-    res.json(sem_senha)
+    res.json({ usuarios: sem_senha, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)), totalInativos })
   } catch (err) { next(err) }
 })
 
