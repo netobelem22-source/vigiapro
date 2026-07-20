@@ -76,12 +76,18 @@ router.get('/', async (req, res, next) => {
       ? { unidadeId: req.usuario.unidadeId }
       : {}
 
-    // Busca única do mês — usada para montar "todos" e cada segmento, sem repetir a consulta
+    // Busca única do mês — usada para montar "todos" e cada segmento, sem repetir a consulta.
+    // Filtra pelo mês do PEDIDO (data do turno), não pela hora do ponto: um turno que atravessa
+    // a virada de mês (entrada dia 31 à noite, saída dia 1 de manhã) tem a saída fora do intervalo
+    // de horario do mês anterior — usar a data do pedido mantém entrada e saída no mesmo recorte.
     const pontos = await prisma.ponto.findMany({
       where: {
         ...whereBase,
         status: 'CONFIRMADO',
-        horario: { gte: inicio, lt: fim }
+        OR: [
+          { pedido: { data: { gte: inicio, lt: fim } } },
+          { pedidoId: null, horario: { gte: inicio, lt: fim } }
+        ]
       },
       include: {
         unidade: { include: { empresa: true } },
@@ -95,7 +101,12 @@ router.get('/', async (req, res, next) => {
     const paresPorChave = {}
     for (const ponto of pontos) {
       const nomeVigia = ponto.nomeVigia || ponto.vigia?.nome || 'Desconhecido'
-      const dia = new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+      // Usa a data do PEDIDO (data do turno) como referência do dia, não a hora do ponto —
+      // turnos noturnos têm entrada e saída em dias de calendário diferentes (atravessam a meia-noite),
+      // e usar a hora de cada ponto separadamente quebrava o pareamento entrada/saída desses turnos.
+      const dia = ponto.pedido?.data
+        ? new Date(ponto.pedido.data).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+        : new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
       const vigiaKey = ponto.vigiaId || nomeVigia
       const chave = `${ponto.pedidoId || ponto.unidadeId}|${vigiaKey}|${dia}`
 
