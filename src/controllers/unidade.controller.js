@@ -6,7 +6,7 @@ const CAMPOS_PARCEIRO = { id: true, nome: true, endereco: true, cidade: true, es
 
 const listar = async (req, res, next) => {
   try {
-    const { busca, page, limit } = req.query
+    const { busca, semGps, page, limit } = req.query
     const pg = Math.max(1, parseInt(page) || 1)
     const lim = Math.min(100, parseInt(limit) || 24)
     const skip = (pg - 1) * lim
@@ -17,9 +17,10 @@ const listar = async (req, res, next) => {
         { cidade: { contains: busca, mode: 'insensitive' } }
       ]
     } : {}
+    const semGpsWhere = semGps === 'true' ? { latitude: null } : {}
 
     if (req.usuario.role === 'TERCEIRO') {
-      const where = { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) }, ...buscaWhere }
+      const where = { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) }, ...buscaWhere, ...semGpsWhere }
       const [total, unidades] = await Promise.all([
         prisma.unidade.count({ where }),
         prisma.unidade.findMany({ where, select: CAMPOS_PARCEIRO, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim })
@@ -27,18 +28,19 @@ const listar = async (req, res, next) => {
       return res.json({ unidades, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)) })
     }
 
-    const where = { ativo: true, ...buscaWhere }
+    const where = { ativo: true, ...buscaWhere, ...semGpsWhere }
     const [total, unidades, resumoAtivas] = await Promise.all([
       prisma.unidade.count({ where }),
       prisma.unidade.findMany({ where, include: { empresa: true }, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim }),
-      prisma.unidade.findMany({ where: { ativo: true }, select: { cidade: true, valorDiaria: true } })
+      prisma.unidade.findMany({ where: { ativo: true }, select: { cidade: true, valorDiaria: true, latitude: true } })
     ])
     const totalCidades = new Set(resumoAtivas.map(u => u.cidade)).size
     const semValor = resumoAtivas.filter(u => !u.valorDiaria).length
+    const semGpsCount = resumoAtivas.filter(u => !u.latitude).length
 
     res.json({
       unidades, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)),
-      totalUnidades: resumoAtivas.length, totalCidades, semValor
+      totalUnidades: resumoAtivas.length, totalCidades, semValor, semGps: semGpsCount
     })
   } catch (err) { next(err) }
 }
