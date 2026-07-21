@@ -1,10 +1,8 @@
 const prisma = require('../utils/prisma')
 const { unidadesDoParceiro } = require('../utils/parceiro')
+const { rangeDiaBrasil } = require('../utils/data')
 
-const rangeData = (dataStr) => {
-  const [ano, mes, dia] = dataStr.split('-').map(Number)
-  return { gte: new Date(ano, mes - 1, dia, 0, 0, 0), lt: new Date(ano, mes - 1, dia + 1, 0, 0, 0) }
-}
+const rangeData = (dataStr) => rangeDiaBrasil(dataStr)
 
 const dataLocal = (dataStr) => {
   const [ano, mes, dia] = dataStr.split('-').map(Number)

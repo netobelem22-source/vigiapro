@@ -1,10 +1,9 @@
 const prisma = require('../utils/prisma')
+const { rangeDiaBrasil } = require('../utils/data')
 
 const resumoHoje = async (req, res, next) => {
   try {
-    const agora = new Date()
-    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0)
-    const amanha = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1, 0, 0, 0)
+    const { gte: hoje, lt: amanha } = rangeDiaBrasil()
     const where = req.usuario.role === 'GERENTE' ? { unidadeId: req.usuario.unidadeId } : {}
 
     // Busca configuração de valor

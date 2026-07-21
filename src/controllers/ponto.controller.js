@@ -1,6 +1,7 @@
 const prisma = require('../utils/prisma')
 const { enviarNotificacao } = require('../services/notificacao.service')
 const { validarGps } = require('../utils/gps')
+const { rangeDiaBrasil } = require('../utils/data')
 
 const registrar = async (req, res, next) => {
   try {
@@ -70,9 +71,7 @@ const listar = async (req, res, next) => {
       if (vigiaId) where.vigiaId = vigiaId
     }
     if (data) {
-      const inicio = new Date(data)
-      const fim = new Date(data); fim.setDate(fim.getDate() + 1)
-      where.horario = { gte: inicio, lt: fim }
+      where.horario = rangeDiaBrasil(data)
     }
     if (status) where.status = status
     const [total, pontos] = await Promise.all([
