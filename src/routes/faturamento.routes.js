@@ -107,7 +107,10 @@ router.get('/', async (req, res, next) => {
       const dia = ponto.pedido?.data
         ? new Date(ponto.pedido.data).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
         : new Date(ponto.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
-      const vigiaKey = ponto.vigiaId || nomeVigia
+      // Prioriza identificadores confiáveis sobre o nome digitado (texto livre, sujeito a erro
+      // de quem bate o ponto): vigiaId (login no app) > numeroVaga (link atribuído pelo sistema)
+      // > nome digitado, só como último recurso.
+      const vigiaKey = ponto.vigiaId || (ponto.numeroVaga != null ? `vaga${ponto.numeroVaga}` : nomeVigia)
       const chave = `${ponto.pedidoId || ponto.unidadeId}|${vigiaKey}|${dia}`
 
       if (!paresPorChave[chave]) paresPorChave[chave] = { entrada: null, saida: null, nomeVigia }
